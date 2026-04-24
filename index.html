@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greed Island: The Spider's Web</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="overlay"></div>
+    <header>
+        <h1>THE SPIDER'S WEB</h1>
+        <p class="subtitle">Phantom Troupe Network System // ALIVE</p>
+    </header>
+
+    <main class="dashboard">
+        <aside class="panel controls-panel">
+            <h2>NETWORK CONTROLS</h2>
+            
+            <section class="control-group">
+                <h3>Add Connection</h3>
+                <form id="add-edge-form">
+                    <input type="number" id="node-a" placeholder="Node A (1-13)" min="1" max="13" required>
+                    <input type="number" id="node-b" placeholder="Node B (1-13)" min="1" max="13" required>
+                    <input type="number" id="weight" placeholder="Weight (1-20)" step="any" required>
+                    <button type="submit" class="btn">Add Edge</button>
+                </form>
+            </section>
+
+            <section class="control-group">
+                <h3>Modify Connection</h3>
+                <form id="modify-edge-form">
+                    <select id="edge-select" required>
+                        <option value="">Select Edge...</option>
+                    </select>
+                    <input type="number" id="new-weight" placeholder="New Weight" step="any" required>
+                    <button type="button" id="update-btn" class="btn">Update Weight</button>
+                    <button type="button" id="remove-btn" class="btn btn-danger">Remove Edge</button>
+                </form>
+            </section>
+
+            <section class="control-group">
+                <h3>Search / Focus Node</h3>
+                <div class="search-box">
+                    <input type="number" id="search-node" placeholder="Node (1-13) - Leave blank to reset" min="1" max="13">
+                    <button type="button" id="search-btn" class="btn">Focus Node</button>
+                </div>
+                <div id="search-results" class="results-box">Network view reset.</div>
+            </section>
+        </aside>
+
+        <section class="panel visualization-panel">
+            <div class="canvas-container">
+                <canvas id="network-canvas"></canvas>
+                <div id="tooltip" class="tooltip"></div>
+            </div>
+        </section>
+
+        <aside class="panel report-panel">
+            <h2>SYSTEM STATE</h2>
+            
+            <div class="status-box">
+                <h3>MST STATUS</h3>
+                <p>Total Weight: <span id="mst-weight" class="highlight">0</span></p>
+                <p>Edges Used: <span id="mst-count" class="highlight">0</span></p>
+            </div>
+
+            <div class="anomaly-box">
+                <h3>ANOMALY REPORT (REAL-TIME)</h3>
+                <ul id="anomaly-list" class="anomaly-list">
+                    <li>System scanning...</li>
+                </ul>
+            </div>
+            
+            <div class="edge-list-box">
+                <h3>MST EDGES</h3>
+                <ul id="mst-edge-list" class="edge-list">
+                    <!-- Edges listed here -->
+                </ul>
+            </div>
+        </aside>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
