@@ -1,40 +1,51 @@
-GREED ISLAND: THE SPIDER'S WEB
-================================
-Strategy & Logic Documentation
-================================
+================================================================================
+GREED ISLAND: THE SPIDER'S WEB – ARCHITECTURE & STRATEGY DOCUMENT
+================================================================================
 
-1. MINIMUM SPANNING TREE (MST) ALGORITHM
------------------------------------------
-For the core logic, Kruskal's Algorithm was chosen.
-Why Kruskal's Algorithm?
-- The graph represents a network of 13 members of the Phantom Troupe. Kruskal's algorithm is highly efficient for sparse graphs and dynamically handles disconnected components gracefully.
-- Optimization Strategy: We implement Kruskal's Algorithm using a Disjoint Set Union (DSU) data structure with Path Compression and Union by Rank. This ensures that cycle detection and edge inclusion are performed in near-constant time, specifically O(E log E) due to edge sorting, and O(α(V)) for cycle checks.
-- Dynamic Recomputation: Given that the maximum number of nodes is strictly 13, the recomputation of the MST upon any structural change (Add/Remove/Update) happens instantaneously. Filtering out anomalies and re-running Kruskal's ensures a completely valid MST is always maintained without noticeable UI lag.
+1. EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+This project implements an advanced Network Intelligence System designed to model, analyze, and secure the "Phantom Troupe" network structure. To address the challenge constraints—specifically the mandate that the Minimum Spanning Tree (MST) must not collapse due to implicit rule violations—we engineered a multi-layered solution combining Kruskal's Algorithm with a custom heuristic Anomaly Detection AI.
 
-2. ADVANCED ANOMALY DETECTION (TRIANGLE INEQUALITY & HEURISTICS)
------------------------------------------
-The core challenge warns: "Some values may violate implicit constraints while still appearing correct."
-A naive check for negative weights or weights > 20 is insufficient to guarantee the integrity of a dynamic web.
+2. CORE ALGORITHM: PROTECTED KRUSKAL'S MST
+--------------------------------------------------------------------------------
+The foundational MST is built using Kruskal’s Algorithm, backed by a Disjoint Set Union (DSU) data structure featuring both Path Compression and Union by Rank.
+- Complexity: The time complexity is bounded by O(E log E) for sorting the edges, and O(α(V)) for the union-find operations, making it highly optimal.
+- Dynamic Recomputation: Given the dynamic nature of the problem, the MST is recomputed instantaneously upon any graph mutation (Add/Remove/Update).
 
-Logic Implementation & Suspicion Level System:
-1. Positivity & Range Limits: 
-   - Weight <= 0: Violates the fundamental definition of connection strength. (Suspicion: 100%)
-   - Weight > 20: Violates the specified game constraints. (Suspicion: 100%)
-   - Self-loops (A=A): Structurally invalid. (Suspicion: 100%)
+3. ADVANCED ANOMALY DETECTION ENGINE
+--------------------------------------------------------------------------------
+The primary challenge warns of "implicit constraints" and "cursed edges." A naive approach (e.g., just filtering negative weights) is insufficient. We implemented a continuous, multi-dimensional validation system:
 
-2. Triangle Inequality Check (The "Implicit Constraint"):
-   In a stable metric space, the direct connection between two nodes should logically be less than or equal to any detour through a third node. 
-   If Weight(A, C) > Weight(A, B) + Weight(B, C), the edge (A, C) actively violates the geometric stability of the web. 
-   We dynamically calculate the `minDetour` for every edge. 
-   - If an edge's weight exceeds its `minDetour`, we calculate a "Suspicion Level %" based on the ratio: `Suspicion = (Weight / minDetour) * 50`.
-   - The larger the violation, the higher the suspicion.
+A. Baseline Validation:
+   - Weights <= 0: Flagged as structurally impossible (Suspicion: 100%).
+   - Weights > 20: Flagged as exceeding natural game limits (Suspicion: 100%).
+   - Self-Loops: Paradoxical connections are instantly rejected.
 
-3. Filtering Cursed Edges:
-   Any edge reaching a Suspicion Level of 80% or higher is officially classified as a "Cursed Edge".
-   The `computeMST()` function actively filters out ALL Cursed Edges *before* feeding the data into Kruskal's algorithm, absolutely guaranteeing that the tree cannot be infected and subsequently collapse.
+B. Geometric Stability Check (Triangle Inequality):
+   - The most advanced layer of our detection system checks for topological paradoxes. In a stable metric space, the direct connection between two nodes should logically be less than or equal to the shortest detour through an adjacent third node.
+   - For every edge (A, C), we calculate `minDetour = Weight(A, B) + Weight(B, C)`.
+   - If `Weight(A, C) > minDetour`, the edge violates the geometric stability of the web.
+   - Suspicion Scoring: The severity of the violation is calculated proportionally: `Suspicion = (Weight / minDetour) * 50`. 
 
-3. VISUALIZING THE 'ALIVE' WEB & UI
------------------------------------------
-- Force-Directed Physics: The web is not static. It "vibrates faintly". We implemented a Custom Force-Directed Physics engine on the HTML5 Canvas. Nodes constantly experience mutual repulsion, edge-based spring attraction, and a central gravitational pull, coupled with microscopic random vibrations.
-- Interactive Focus: Searching for a node fades the rest of the web, focusing entirely on the searched node and its direct connections.
-- Click to Inspect: Clicking on the canvas raycasts the closest edge, freezing the physics tooltip to display its exact Weight, Suspicion Level, and Status.
+C. Quarantine Protocol:
+   - Edges with a Suspicion Score >= 80% are designated as "Cursed Edges".
+   - The MST Engine strictly filters out ALL Cursed Edges *before* executing Kruskal's algorithm, absolutely guaranteeing that the resulting tree is pure and mathematically stable.
+
+4. VISUALIZATION & PHYSICS SIMULATION
+--------------------------------------------------------------------------------
+Rather than using heavy external libraries (like D3.js or Vis.js), we built a proprietary Force-Directed Graph Engine using HTML5 Canvas and Vanilla JavaScript.
+- Repulsion Forces: Nodes act as charged particles, constantly repelling each other (Coulomb's Law approximation).
+- Spring Attraction: Edges act as springs, pulling connected nodes together based on Hooke's Law, modified by edge weight.
+- Gravity & Dampening: A central gravitational pull keeps the network centered, while kinetic dampening prevents infinite oscillation.
+- The result is an "Alive Web" that breathes and reacts to structural changes in real-time.
+
+5. ENTERPRISE UI & FEATURES
+--------------------------------------------------------------------------------
+- Algorithmic Animation: Users can trigger a step-by-step visual animation of Kruskal's algorithm building the MST.
+- State Management (Undo/Redo): Implemented a robust state-history stack allowing the user to seamlessly roll back structural changes.
+- Import/Export: Network states can be serialized to JSON and exported/imported for offline analysis.
+- Cyberpunk Design System: A highly stylized, immersive "Hacker Terminal" UI utilizing glassmorphism, scanline overlays, and neon typography to match the lore of the Phantom Troupe.
+
+================================================================================
+END OF DOCUMENT
+================================================================================

@@ -3,81 +3,290 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Greed Island: The Spider's Web</title>
+    <title>Greed Island: The Spider's Web — Network Intelligence System</title>
+    <meta name="description" content="Advanced Phantom Troupe Network Analysis System with MST, Anomaly Detection, and Force-Directed Physics Visualization">
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="overlay"></div>
-    <header>
-        <h1>THE SPIDER'S WEB</h1>
-        <p class="subtitle">Phantom Troupe Network System // ALIVE</p>
+    <div class="scanline-overlay"></div>
+    <div class="particle-container" id="particles"></div>
+    
+    <header id="main-header">
+        <div class="header-left">
+            <div class="logo-icon">
+                <svg viewBox="0 0 40 40" width="40" height="40">
+                    <circle cx="20" cy="20" r="18" fill="none" stroke="var(--neon-green)" stroke-width="1.5" opacity="0.6"/>
+                    <circle cx="20" cy="20" r="12" fill="none" stroke="var(--neon-green)" stroke-width="1"/>
+                    <circle cx="20" cy="20" r="3" fill="var(--neon-green)"/>
+                    <line x1="20" y1="2" x2="20" y2="8" stroke="var(--neon-green)" stroke-width="1"/>
+                    <line x1="20" y1="32" x2="20" y2="38" stroke="var(--neon-green)" stroke-width="1"/>
+                    <line x1="2" y1="20" x2="8" y2="20" stroke="var(--neon-green)" stroke-width="1"/>
+                    <line x1="32" y1="20" x2="38" y2="20" stroke="var(--neon-green)" stroke-width="1"/>
+                </svg>
+            </div>
+            <div class="header-text">
+                <h1>THE SPIDER'S WEB</h1>
+                <p class="subtitle">Phantom Troupe Network Intelligence System <span class="status-badge" id="system-status">● ONLINE</span></p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="header-stats">
+                <div class="stat-chip">
+                    <span class="stat-label">NODES</span>
+                    <span class="stat-value" id="header-nodes">13</span>
+                </div>
+                <div class="stat-chip">
+                    <span class="stat-label">EDGES</span>
+                    <span class="stat-value" id="header-edges">0</span>
+                </div>
+                <div class="stat-chip danger" id="threat-chip">
+                    <span class="stat-label">THREATS</span>
+                    <span class="stat-value" id="header-threats">0</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn" id="undo-btn" title="Undo (Ctrl+Z)" disabled>↶</button>
+                <button class="icon-btn" id="redo-btn" title="Redo (Ctrl+Y)" disabled>↷</button>
+                <button class="icon-btn" id="export-btn" title="Export Graph">⇩</button>
+                <button class="icon-btn" id="import-btn" title="Import Graph">⇧</button>
+                <input type="file" id="import-file" accept=".json" style="display:none">
+            </div>
+        </div>
     </header>
 
     <main class="dashboard">
-        <aside class="panel controls-panel">
-            <h2>NETWORK CONTROLS</h2>
-            
-            <section class="control-group">
-                <h3>Add Connection</h3>
-                <form id="add-edge-form">
-                    <input type="number" id="node-a" placeholder="Node A (1-13)" min="1" max="13" required>
-                    <input type="number" id="node-b" placeholder="Node B (1-13)" min="1" max="13" required>
-                    <input type="number" id="weight" placeholder="Weight (1-20)" step="any" required>
-                    <button type="submit" class="btn">Add Edge</button>
-                </form>
-            </section>
+        <!-- LEFT PANEL: Controls -->
+        <aside class="panel controls-panel" id="controls-panel">
+            <div class="panel-header">
+                <h2>⚡ NETWORK CONTROLS</h2>
+                <button class="collapse-btn" data-target="controls-content">▼</button>
+            </div>
+            <div class="panel-content" id="controls-content">
+                
+                <section class="control-group">
+                    <h3>
+                        <span class="section-icon">◈</span> Add Connection
+                    </h3>
+                    <form id="add-edge-form" autocomplete="off">
+                        <div class="input-row">
+                            <div class="input-wrapper">
+                                <label for="node-a">From</label>
+                                <select id="node-a" required>
+                                    <option value="">Node...</option>
+                                </select>
+                            </div>
+                            <div class="input-wrapper">
+                                <label for="node-b">To</label>
+                                <select id="node-b" required>
+                                    <option value="">Node...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="input-wrapper">
+                            <label for="weight">Weight</label>
+                            <input type="number" id="weight" placeholder="Connection strength (1-20)" step="any" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <span class="btn-icon">+</span> Add Edge
+                        </button>
+                    </form>
+                </section>
 
-            <section class="control-group">
-                <h3>Modify Connection</h3>
-                <form id="modify-edge-form">
-                    <select id="edge-select" required>
-                        <option value="">Select Edge...</option>
-                    </select>
-                    <input type="number" id="new-weight" placeholder="New Weight" step="any" required>
-                    <button type="button" id="update-btn" class="btn">Update Weight</button>
-                    <button type="button" id="remove-btn" class="btn btn-danger">Remove Edge</button>
-                </form>
-            </section>
+                <section class="control-group">
+                    <h3>
+                        <span class="section-icon">◈</span> Modify Connection
+                    </h3>
+                    <form id="modify-edge-form" autocomplete="off">
+                        <div class="input-wrapper">
+                            <label for="edge-select">Select Edge</label>
+                            <select id="edge-select" required>
+                                <option value="">Choose an edge...</option>
+                            </select>
+                        </div>
+                        <div class="input-wrapper">
+                            <label for="new-weight">New Weight</label>
+                            <input type="number" id="new-weight" placeholder="New weight value" step="any">
+                        </div>
+                        <div class="btn-row">
+                            <button type="button" id="update-btn" class="btn btn-primary btn-small">✎ Update</button>
+                            <button type="button" id="remove-btn" class="btn btn-danger btn-small">✕ Remove</button>
+                        </div>
+                    </form>
+                </section>
 
-            <section class="control-group">
-                <h3>Search / Focus Node</h3>
-                <div class="search-box">
-                    <input type="number" id="search-node" placeholder="Node (1-13) - Leave blank to reset" min="1" max="13">
-                    <button type="button" id="search-btn" class="btn">Focus Node</button>
-                </div>
-                <div id="search-results" class="results-box">Network view reset.</div>
-            </section>
+                <section class="control-group">
+                    <h3>
+                        <span class="section-icon">◈</span> Focus & Search
+                    </h3>
+                    <div class="input-wrapper">
+                        <label for="search-node">Target Node</label>
+                        <select id="search-node">
+                            <option value="">All nodes (reset)</option>
+                        </select>
+                    </div>
+                    <button type="button" id="search-btn" class="btn btn-secondary">🔍 Focus Node</button>
+                    <div id="search-results" class="results-box">
+                        <span class="pulse-dot"></span> Full network view active.
+                    </div>
+                </section>
+
+                <section class="control-group">
+                    <h3>
+                        <span class="section-icon">◈</span> MST Animation
+                    </h3>
+                    <button type="button" id="animate-mst-btn" class="btn btn-accent">▶ Animate MST Build</button>
+                    <button type="button" id="reset-animation-btn" class="btn btn-secondary btn-small">⟲ Reset Animation</button>
+                    <div class="speed-control">
+                        <label>Speed:</label>
+                        <input type="range" id="anim-speed" min="100" max="2000" value="800" step="100">
+                        <span id="speed-label">800ms</span>
+                    </div>
+                </section>
+
+                <section class="control-group">
+                    <h3>
+                        <span class="section-icon">◈</span> Physics Engine
+                    </h3>
+                    <div class="toggle-row">
+                        <label>Physics Simulation</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="physics-toggle" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <label>Edge Weight Labels</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="labels-toggle" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <label>Node Names</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="names-toggle" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </section>
+            </div>
         </aside>
 
+        <!-- CENTER: Canvas Visualization -->
         <section class="panel visualization-panel">
-            <div class="canvas-container">
+            <div class="canvas-container" id="canvas-container">
                 <canvas id="network-canvas"></canvas>
                 <div id="tooltip" class="tooltip"></div>
+                <div id="canvas-legend" class="canvas-legend">
+                    <div class="legend-item"><span class="legend-color" style="background:#00ff88"></span> MST Edge</div>
+                    <div class="legend-item"><span class="legend-color legend-dashed" style="background:#ff4757"></span> Cursed Edge</div>
+                    <div class="legend-item"><span class="legend-color" style="background:#ffa502"></span> Warning Edge</div>
+                    <div class="legend-item"><span class="legend-color" style="background:rgba(164,176,190,0.4)"></span> Normal Edge</div>
+                </div>
+                <div class="canvas-info" id="canvas-info">
+                    <span>Click edge to inspect • Drag nodes to move • Scroll to zoom</span>
+                </div>
             </div>
         </section>
 
-        <aside class="panel report-panel">
-            <h2>SYSTEM STATE</h2>
-            
-            <div class="status-box">
-                <h3>MST STATUS</h3>
-                <p>Total Weight: <span id="mst-weight" class="highlight">0</span></p>
-                <p>Edges Used: <span id="mst-count" class="highlight">0</span></p>
+        <!-- RIGHT PANEL: Reports -->
+        <aside class="panel report-panel" id="report-panel">
+            <div class="panel-header">
+                <h2>📊 SYSTEM INTELLIGENCE</h2>
             </div>
+            <div class="panel-content">
 
-            <div class="anomaly-box">
-                <h3>ANOMALY REPORT (REAL-TIME)</h3>
-                <ul id="anomaly-list" class="anomaly-list">
-                    <li>System scanning...</li>
-                </ul>
-            </div>
-            
-            <div class="edge-list-box">
-                <h3>MST EDGES</h3>
-                <ul id="mst-edge-list" class="edge-list">
-                    <!-- Edges listed here -->
-                </ul>
+                <div class="report-section status-box">
+                    <h3>
+                        <span class="section-icon glow-green">●</span> MST STATUS
+                    </h3>
+                    <div class="mst-stats-grid">
+                        <div class="mst-stat">
+                            <span class="mst-stat-value" id="mst-weight">0</span>
+                            <span class="mst-stat-label">Total Weight</span>
+                        </div>
+                        <div class="mst-stat">
+                            <span class="mst-stat-value" id="mst-count">0</span>
+                            <span class="mst-stat-label">Edges Used</span>
+                        </div>
+                        <div class="mst-stat">
+                            <span class="mst-stat-value" id="mst-components">0</span>
+                            <span class="mst-stat-label">Components</span>
+                        </div>
+                        <div class="mst-stat">
+                            <span class="mst-stat-value" id="mst-complete">0%</span>
+                            <span class="mst-stat-label">Completeness</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="report-section graph-stats-box">
+                    <h3>
+                        <span class="section-icon glow-cyan">●</span> GRAPH PROPERTIES
+                    </h3>
+                    <div class="property-list">
+                        <div class="property-item">
+                            <span class="prop-key">Density</span>
+                            <span class="prop-value" id="graph-density">0%</span>
+                        </div>
+                        <div class="property-item">
+                            <span class="prop-key">Avg. Degree</span>
+                            <span class="prop-value" id="avg-degree">0</span>
+                        </div>
+                        <div class="property-item">
+                            <span class="prop-key">Avg. Weight</span>
+                            <span class="prop-value" id="avg-weight">0</span>
+                        </div>
+                        <div class="property-item">
+                            <span class="prop-key">Weight Range</span>
+                            <span class="prop-value" id="weight-range">-</span>
+                        </div>
+                        <div class="property-item">
+                            <span class="prop-key">Connected</span>
+                            <span class="prop-value" id="is-connected">-</span>
+                        </div>
+                        <div class="property-item">
+                            <span class="prop-key">Algorithm</span>
+                            <span class="prop-value">Kruskal + DSU</span>
+                        </div>
+                        <div class="property-item">
+                            <span class="prop-key">Complexity</span>
+                            <span class="prop-value">O(E log E)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="report-section anomaly-box">
+                    <h3>
+                        <span class="section-icon glow-red">●</span> ANOMALY REPORT
+                        <span class="anomaly-count" id="anomaly-count">0</span>
+                    </h3>
+                    <ul id="anomaly-list" class="anomaly-list">
+                        <li class="no-anomaly"><span class="pulse-dot green"></span> Web integrity verified. No cursed edges.</li>
+                    </ul>
+                </div>
+                
+                <div class="report-section edge-list-box">
+                    <h3>
+                        <span class="section-icon glow-green">●</span> MST EDGES
+                    </h3>
+                    <ul id="mst-edge-list" class="edge-list">
+                        <!-- Edges listed here -->
+                    </ul>
+                </div>
+
+                <div class="report-section log-box">
+                    <h3>
+                        <span class="section-icon glow-cyan">●</span> ACTIVITY LOG
+                    </h3>
+                    <div id="activity-log" class="activity-log">
+                        <div class="log-entry">
+                            <span class="log-time">SYS</span>
+                            <span class="log-msg">System initialized. Web is alive.</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </aside>
     </main>

@@ -1,495 +1,578 @@
-// Disjoint Set Union (Union-Find) for Kruskal's Algorithm
+// ==========================================
+// GREED ISLAND: THE SPIDER'S WEB
+// Advanced Network Intelligence System
+// ==========================================
+
+// --- Phantom Troupe Members ---
+const TROUPE_MEMBERS = {
+    1: "Chrollo Lucilfer", 2: "Feitan Portor", 3: "Machi Komacine",
+    4: "Hisoka Morow", 5: "Phinks Magcub", 6: "Shalnark",
+    7: "Franklin Bordeau", 8: "Shizuku Murasaki", 9: "Pakunoda",
+    10: "Bonolenov Ndongo", 11: "Uvogin", 12: "Kortopi", 13: "Kalluto Zoldyck"
+};
+
+// --- Disjoint Set Union (DSU) ---
 class DSU {
     constructor(n) {
-        this.parent = new Array(n + 1);
-        this.rank = new Array(n + 1);
-        for (let i = 0; i <= n; i++) {
-            this.parent[i] = i;
-            this.rank[i] = 0;
-        }
+        this.parent = new Array(n + 1).fill(0).map((_, i) => i);
+        this.rank = new Array(n + 1).fill(0);
     }
-    
     find(i) {
         if (this.parent[i] === i) return i;
-        this.parent[i] = this.find(this.parent[i]);
-        return this.parent[i];
+        return this.parent[i] = this.find(this.parent[i]);
     }
-    
     union(i, j) {
-        let rootI = this.find(i);
-        let rootJ = this.find(j);
-        
+        let rootI = this.find(i), rootJ = this.find(j);
         if (rootI !== rootJ) {
-            if (this.rank[rootI] < this.rank[rootJ]) {
-                this.parent[rootI] = rootJ;
-            } else if (this.rank[rootI] > this.rank[rootJ]) {
-                this.parent[rootJ] = rootI;
-            } else {
-                this.parent[rootJ] = rootI;
-                this.rank[rootI]++;
-            }
+            if (this.rank[rootI] < this.rank[rootJ]) this.parent[rootI] = rootJ;
+            else if (this.rank[rootI] > this.rank[rootJ]) this.parent[rootJ] = rootI;
+            else { this.parent[rootJ] = rootI; this.rank[rootI]++; }
             return true;
         }
         return false;
     }
 }
 
-// Graph State
-let nextEdgeId = 1;
-const graph = {
-    nodes: 13,
-    edges: []
+// --- System State ---
+let state = {
+    edges: [],
+    nextEdgeId: 1,
+    nodesCount: 13
 };
 
-// Physics Simulation State
+let history = [];
+let redoStack = [];
+
+let config = {
+    physicsEnabled: true,
+    showLabels: true,
+    showNames: true,
+    animSpeed: 800
+};
+
+// --- Physics State ---
 let physicsNodes = {};
-for (let i = 1; i <= 13; i++) {
-    physicsNodes[i] = { x: Math.random() * 800, y: Math.random() * 600, vx: 0, vy: 0 };
+for (let i = 1; i <= state.nodesCount; i++) {
+    physicsNodes[i] = { x: Math.random() * 800, y: Math.random() * 600, vx: 0, vy: 0, dragged: false };
 }
-
 let searchedNode = null;
-let clickedEdge = null;
+let hoveredEdge = null;
+let animationMode = false;
+let animationEdges = new Set();
+let animationInterval = null;
 
-// Required Functions
-function addEdge(g, edge) {
-    edge.id = nextEdgeId++;
-    g.edges.push(edge);
-    updateApp();
+// --- DOM Elements ---
+const canvas = document.getElementById('network-canvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+const logContainer = document.getElementById('activity-log');
+
+// --- Initialization ---
+function init() {
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    populateSelects();
+    
+    // Default Edges
+    addEdge(1, 2, 4); addEdge(2, 3, 7); addEdge(3, 4, 2); addEdge(4, 5, 9);
+    addEdge(1, 5, 12); addEdge(5, 6, 5); addEdge(6, 7, 8); addEdge(7, 8, 1);
+    addEdge(2, 8, 15); addEdge(8, 9, 6); addEdge(9, 10, 3); addEdge(10, 11, 11);
+    addEdge(11, 12, 14); addEdge(12, 13, 10);
+    // Cursed
+    addEdge(13, 1, -5); addEdge(2, 4, 19); 
+    
+    clearHistory(); // initial state doesn't count as undoable action
+    
+    setupEventListeners();
+    requestAnimationFrame(animate);
 }
 
-function removeEdge(g, edgeId) {
-    g.edges = g.edges.filter(e => e.id !== edgeId);
-    if (clickedEdge && clickedEdge.id === edgeId) {
-        clickedEdge = null;
-        document.getElementById('tooltip').style.opacity = 0;
+function resizeCanvas() {
+    let rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+}
+
+// --- Logging & History ---
+function logActivity(msg, type="SYS") {
+    let div = document.createElement('div');
+    div.className = 'log-entry';
+    let color = type === 'ERR' ? 'var(--danger)' : type === 'WRN' ? 'var(--warn)' : 'var(--text-dim)';
+    let time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: "numeric", minute: "numeric", second: "numeric" });
+    div.innerHTML = `<span class="log-time" style="color:${color}">${time}</span> <span class="log-msg">${msg}</span>`;
+    logContainer.prepend(div);
+}
+
+function saveState() {
+    history.push(JSON.parse(JSON.stringify(state)));
+    redoStack = [];
+    updateUndoRedoBtns();
+}
+function clearHistory() { history = []; redoStack = []; updateUndoRedoBtns(); }
+
+function undo() {
+    if (history.length > 0) {
+        redoStack.push(JSON.parse(JSON.stringify(state)));
+        state = history.pop();
+        logActivity("Action undone.");
+        updateApp();
     }
+}
+function redo() {
+    if (redoStack.length > 0) {
+        history.push(JSON.parse(JSON.stringify(state)));
+        state = redoStack.pop();
+        logActivity("Action redone.");
+        updateApp();
+    }
+}
+function updateUndoRedoBtns() {
+    document.getElementById('undo-btn').disabled = history.length === 0;
+    document.getElementById('redo-btn').disabled = redoStack.length === 0;
+}
+
+// --- Core Logic ---
+function addEdge(from, to, weight) {
+    let edge = { id: state.nextEdgeId++, from, to, weight };
+    state.edges.push(edge);
+    logActivity(`Added edge ${from}↔${to} (W:${weight})`, 'SYS');
     updateApp();
 }
 
-function updateWeight(g, edgeId, newWeight) {
-    let edge = g.edges.find(e => e.id === edgeId);
-    if (edge) {
-        edge.weight = newWeight;
+function removeEdge(id) {
+    let idx = state.edges.findIndex(e => e.id === id);
+    if (idx > -1) {
+        let e = state.edges[idx];
+        state.edges.splice(idx, 1);
+        logActivity(`Removed edge ${e.from}↔${e.to}`, 'SYS');
         updateApp();
     }
 }
 
-function detectAnomaly(g) {
+function updateWeight(id, w) {
+    let e = state.edges.find(x => x.id === id);
+    if (e) {
+        e.weight = w;
+        logActivity(`Updated edge ${e.from}↔${e.to} to W:${w}`, 'SYS');
+        updateApp();
+    }
+}
+
+// --- Anomaly Detection ---
+function detectAnomaly() {
     let anomalies = [];
-    
-    // Create an adjacency list for triangle inequality check
     let adj = {};
-    for (let i = 1; i <= g.nodes; i++) adj[i] = [];
-    g.edges.forEach(e => {
-        adj[e.from].push(e);
-        adj[e.to].push(e);
-    });
+    for (let i = 1; i <= state.nodesCount; i++) adj[i] = [];
+    state.edges.forEach(e => { adj[e.from].push(e); adj[e.to].push(e); });
 
-    g.edges.forEach(e => {
-        let suspicion = 0;
-        let reason = "";
-
-        if (e.weight <= 0) {
-            suspicion = 100;
-            reason = "Weight ≤ 0 violates strict positivity.";
-        } else if (e.weight > 20) {
-            suspicion = 100;
-            reason = "Weight exceeds natural network limits (>20).";
-        } else if (e.from === e.to) {
-            suspicion = 100;
-            reason = "Self-loop is structurally invalid.";
-        } else {
-            // Triangle Inequality Check
-            let minDetour = Infinity;
-            let detourPath = null;
+    state.edges.forEach(e => {
+        let suspicion = 0, reason = "";
+        
+        if (e.weight <= 0) { suspicion = 100; reason = "Weight ≤ 0 violates physical laws of the web."; }
+        else if (e.weight > 20) { suspicion = 100; reason = "Weight exceeds structural limit (>20)."; }
+        else if (e.from === e.to) { suspicion = 100; reason = "Self-loop paradox detected."; }
+        else {
+            // Triangle Inequality
+            let minDetour = Infinity, detourPath = null;
+            let nFrom = adj[e.from].filter(x => x.id !== e.id).map(x => ({ n: x.from === e.from ? x.to : x.from, w: x.weight }));
+            let nTo = adj[e.to].filter(x => x.id !== e.id).map(x => ({ n: x.from === e.to ? x.to : x.from, w: x.weight }));
             
-            // Find common neighbors between e.from and e.to
-            let neighborsFrom = adj[e.from].filter(edge => edge.id !== e.id).map(edge => ({
-                node: edge.from === e.from ? edge.to : edge.from,
-                weight: edge.weight
-            }));
-            
-            let neighborsTo = adj[e.to].filter(edge => edge.id !== e.id).map(edge => ({
-                node: edge.from === e.to ? edge.to : edge.from,
-                weight: edge.weight
-            }));
-
-            neighborsFrom.forEach(nf => {
-                let nt = neighborsTo.find(n => n.node === nf.node);
+            nFrom.forEach(nf => {
+                let nt = nTo.find(n => n.n === nf.n);
                 if (nt) {
-                    let detourWeight = nf.weight + nt.weight;
-                    if (detourWeight < minDetour) {
-                        minDetour = detourWeight;
-                        detourPath = nf.node;
-                    }
+                    let w = nf.w + nt.w;
+                    if (w < minDetour) { minDetour = w; detourPath = nf.n; }
                 }
             });
 
             if (minDetour !== Infinity && e.weight > minDetour) {
-                // Suspicion scales based on how much it exceeds the detour
-                // If weight is exactly minDetour, suspicion is 50%. If weight is 2x minDetour, suspicion is 100%
                 suspicion = Math.min(100, Math.round((e.weight / minDetour) * 50));
-                reason = `Violates Triangle Inequality with node ${detourPath}. Detour weight: ${minDetour}.`;
+                reason = `Triangle inequality violation via node ${detourPath} (Detour W: ${minDetour}).`;
             }
         }
 
-        if (suspicion >= 80) {
-            anomalies.push({ edge: e, reason, suspicion, isCursed: true });
-        } else if (suspicion > 0) {
-            anomalies.push({ edge: e, reason, suspicion, isCursed: false });
+        if (suspicion > 0) {
+            anomalies.push({ edge: e, reason, suspicion, isCursed: suspicion >= 80 });
         }
     });
     return anomalies;
 }
 
-function computeMST(g) {
-    let anomalies = detectAnomaly(g);
-    let cursedEdgeIds = new Set(anomalies.filter(a => a.isCursed).map(a => a.edge.id));
+// --- MST Computation ---
+function computeMST() {
+    let anomalies = detectAnomaly();
+    let cursedIds = new Set(anomalies.filter(a => a.isCursed).map(a => a.edge.id));
     
-    let validEdges = g.edges.filter(e => !cursedEdgeIds.has(e.id));
+    let validEdges = state.edges.filter(e => !cursedIds.has(e.id));
     validEdges.sort((a, b) => a.weight - b.weight);
     
-    let dsu = new DSU(g.nodes);
-    let mstEdges = [];
-    let totalWeight = 0;
+    let dsu = new DSU(state.nodesCount);
+    let mstEdges = [], totalWeight = 0, components = state.nodesCount;
     
-    for (let edge of validEdges) {
-        if (dsu.union(edge.from, edge.to)) {
-            mstEdges.push(edge);
-            totalWeight += edge.weight;
+    for (let e of validEdges) {
+        if (dsu.union(e.from, e.to)) {
+            mstEdges.push(e);
+            totalWeight += e.weight;
+            components--;
         }
     }
     
-    return { edges: mstEdges, totalWeight, anomalies };
+    return { edges: mstEdges, totalWeight, anomalies, components };
 }
 
-// Initial Data
-addEdge(graph, { from: 1, to: 2, weight: 4 });
-addEdge(graph, { from: 2, to: 3, weight: 7 });
-addEdge(graph, { from: 3, to: 4, weight: 2 });
-addEdge(graph, { from: 4, to: 5, weight: 9 });
-addEdge(graph, { from: 1, to: 5, weight: 12 });
-addEdge(graph, { from: 5, to: 6, weight: 5 });
-addEdge(graph, { from: 6, to: 7, weight: 8 });
-addEdge(graph, { from: 7, to: 8, weight: 1 });
-addEdge(graph, { from: 2, to: 8, weight: 15 });
-addEdge(graph, { from: 8, to: 9, weight: 6 });
-addEdge(graph, { from: 9, to: 10, weight: 3 });
-addEdge(graph, { from: 10, to: 11, weight: 11 });
-addEdge(graph, { from: 11, to: 12, weight: 14 });
-addEdge(graph, { from: 12, to: 13, weight: 10 });
-// Cursed edges
-addEdge(graph, { from: 13, to: 1, weight: -5 }); // Suspicion 100%
-addEdge(graph, { from: 2, to: 4, weight: 19 }); // Suspicion ~105% (Detour via 3 is 9)
-
-
-// UI & Physics Logic
-const canvas = document.getElementById('network-canvas');
-const ctx = canvas.getContext('2d');
-const tooltip = document.getElementById('tooltip');
-
-function resizeCanvas() {
-    let container = canvas.parentElement;
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
-    // Recenter nodes if canvas resized significantly
-    for (let i = 1; i <= graph.nodes; i++) {
-        if (!physicsNodes[i].initialized) {
-            physicsNodes[i].x = canvas.width / 2 + (Math.random() * 100 - 50);
-            physicsNodes[i].y = canvas.height / 2 + (Math.random() * 100 - 50);
-            physicsNodes[i].initialized = true;
-        }
-    }
-}
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-function updatePhysics() {
-    const k = Math.sqrt((canvas.width * canvas.height) / graph.nodes) * 0.8;
-    const repulsion = 5000;
-    const centerGravity = 0.02;
-    const damping = 0.85;
-
+// --- Physics Engine ---
+function applyPhysics() {
+    if (!config.physicsEnabled) return;
+    
+    const repulsion = 4000, springStrength = 0.03, damping = 0.8;
     let forces = {};
-    for (let i = 1; i <= graph.nodes; i++) forces[i] = { x: 0, y: 0 };
+    for(let i=1; i<=state.nodesCount; i++) forces[i] = {x:0, y:0};
 
     // Repulsion
-    for (let i = 1; i <= graph.nodes; i++) {
-        for (let j = i + 1; j <= graph.nodes; j++) {
-            let dx = physicsNodes[i].x - physicsNodes[j].x;
-            let dy = physicsNodes[i].y - physicsNodes[j].y;
-            let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            let force = repulsion / dist;
-            forces[i].x += (dx / dist) * force;
-            forces[i].y += (dy / dist) * force;
-            forces[j].x -= (dx / dist) * force;
-            forces[j].y -= (dy / dist) * force;
+    for (let i = 1; i <= state.nodesCount; i++) {
+        for (let j = i + 1; j <= state.nodesCount; j++) {
+            let dx = physicsNodes[i].x - physicsNodes[j].x, dy = physicsNodes[i].y - physicsNodes[j].y;
+            let dist = Math.sqrt(dx*dx + dy*dy) || 1;
+            let f = repulsion / dist;
+            forces[i].x += (dx/dist)*f; forces[i].y += (dy/dist)*f;
+            forces[j].x -= (dx/dist)*f; forces[j].y -= (dy/dist)*f;
         }
     }
 
-    // Attraction (Edges)
-    graph.edges.forEach(edge => {
-        let n1 = physicsNodes[edge.from];
-        let n2 = physicsNodes[edge.to];
-        let dx = n1.x - n2.x;
-        let dy = n1.y - n2.y;
-        let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        // Edge weight influences ideal distance to some extent
-        let idealDist = 100 + (edge.weight * 3);
-        let force = (dist - idealDist) * 0.05;
-        
-        forces[edge.from].x -= (dx / dist) * force;
-        forces[edge.from].y -= (dy / dist) * force;
-        forces[edge.to].x += (dx / dist) * force;
-        forces[edge.to].y += (dy / dist) * force;
+    // Springs
+    state.edges.forEach(e => {
+        let n1 = physicsNodes[e.from], n2 = physicsNodes[e.to];
+        let dx = n1.x - n2.x, dy = n1.y - n2.y;
+        let dist = Math.sqrt(dx*dx + dy*dy) || 1;
+        let ideal = 80 + (e.weight * 5);
+        let f = (dist - ideal) * springStrength;
+        forces[e.from].x -= (dx/dist)*f; forces[e.from].y -= (dy/dist)*f;
+        forces[e.to].x += (dx/dist)*f; forces[e.to].y += (dy/dist)*f;
     });
 
-    // Center gravity & apply forces
-    for (let i = 1; i <= graph.nodes; i++) {
-        forces[i].x += (canvas.width / 2 - physicsNodes[i].x) * centerGravity;
-        forces[i].y += (canvas.height / 2 - physicsNodes[i].y) * centerGravity;
+    // Gravity to center & Apply
+    let cx = canvas.width/2, cy = canvas.height/2;
+    for (let i = 1; i <= state.nodesCount; i++) {
+        forces[i].x += (cx - physicsNodes[i].x) * 0.02;
+        forces[i].y += (cy - physicsNodes[i].y) * 0.02;
 
-        // Vibrate faintly (alive web)
-        forces[i].x += (Math.random() - 0.5) * 2;
-        forces[i].y += (Math.random() - 0.5) * 2;
-
-        physicsNodes[i].vx = (physicsNodes[i].vx + forces[i].x) * damping;
-        physicsNodes[i].vy = (physicsNodes[i].vy + forces[i].y) * damping;
-        physicsNodes[i].x += physicsNodes[i].vx;
-        physicsNodes[i].y += physicsNodes[i].vy;
+        if (!physicsNodes[i].dragged) {
+            physicsNodes[i].vx = (physicsNodes[i].vx + forces[i].x) * damping;
+            physicsNodes[i].vy = (physicsNodes[i].vy + forces[i].y) * damping;
+            physicsNodes[i].x += physicsNodes[i].vx;
+            physicsNodes[i].y += physicsNodes[i].vy;
+        }
         
         // Boundaries
-        physicsNodes[i].x = Math.max(20, Math.min(canvas.width - 20, physicsNodes[i].x));
-        physicsNodes[i].y = Math.max(20, Math.min(canvas.height - 20, physicsNodes[i].y));
+        physicsNodes[i].x = Math.max(30, Math.min(canvas.width - 30, physicsNodes[i].x));
+        physicsNodes[i].y = Math.max(30, Math.min(canvas.height - 30, physicsNodes[i].y));
     }
 }
 
-function drawGraph() {
+// --- Rendering ---
+function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let mst = computeMST();
+    let mstIds = new Set(mst.edges.map(e => e.id));
+    if(animationMode) mstIds = animationEdges;
     
-    let mstResult = computeMST(graph);
-    let mstEdgeIds = new Set(mstResult.edges.map(e => e.id));
-    let cursedEdgeIds = new Set(mstResult.anomalies.filter(a => a.isCursed).map(a => a.edge.id));
-    
-    // Draw edges
-    graph.edges.forEach(edge => {
-        let p1 = physicsNodes[edge.from];
-        let p2 = physicsNodes[edge.to];
+    let cursedIds = new Set(mst.anomalies.filter(a => a.isCursed).map(a => a.edge.id));
+    let warnIds = new Set(mst.anomalies.filter(a => !a.isCursed).map(a => a.edge.id));
+
+    // Edges
+    state.edges.forEach(e => {
+        let p1 = physicsNodes[e.from], p2 = physicsNodes[e.to];
+        let isFocus = searchedNode === null || e.from === searchedNode || e.to === searchedNode;
         
-        let isSearched = searchedNode === null || 
-                         edge.from === searchedNode || 
-                         edge.to === searchedNode;
-                         
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+        ctx.lineWidth = 2; ctx.shadowBlur = 0; ctx.setLineDash([]);
         
-        ctx.lineWidth = 2;
-        
-        if (!isSearched) {
+        if (!isFocus) {
             ctx.strokeStyle = 'rgba(164, 176, 190, 0.05)';
-            ctx.setLineDash([]);
-            ctx.shadowBlur = 0;
-        } else if (cursedEdgeIds.has(edge.id)) {
-            ctx.strokeStyle = 'rgba(255, 71, 87, 0.8)';
-            ctx.setLineDash([5, 5]);
-            ctx.lineWidth = 3;
-            ctx.shadowColor = 'rgba(255, 71, 87, 0.5)';
-            ctx.shadowBlur = 10;
-        } else if (mstEdgeIds.has(edge.id)) {
-            ctx.strokeStyle = '#2ed573';
-            ctx.shadowColor = '#2ed573';
-            ctx.shadowBlur = 15;
-            ctx.lineWidth = 4;
-            ctx.setLineDash([]);
+        } else if (cursedIds.has(e.id)) {
+            ctx.strokeStyle = 'rgba(255, 58, 92, 0.8)';
+            ctx.setLineDash([5, 5]); ctx.lineWidth = 3;
+            ctx.shadowColor = 'rgba(255, 58, 92, 0.5)'; ctx.shadowBlur = 10;
+        } else if (mstIds.has(e.id)) {
+            ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 4;
+            ctx.shadowColor = '#00ff88'; ctx.shadowBlur = 15;
+        } else if (warnIds.has(e.id)) {
+            ctx.strokeStyle = '#ffa502'; ctx.lineWidth = 2;
         } else {
-            ctx.strokeStyle = 'rgba(164, 176, 190, 0.4)';
-            ctx.setLineDash([]);
-            ctx.shadowBlur = 0;
+            ctx.strokeStyle = 'rgba(164, 176, 190, 0.3)';
         }
-        
-        if (clickedEdge && clickedEdge.id === edge.id) {
-            ctx.strokeStyle = '#ffa502';
-            ctx.shadowColor = '#ffa502';
-            ctx.shadowBlur = 20;
-            ctx.lineWidth = 5;
-            ctx.setLineDash([]);
+
+        if (hoveredEdge && hoveredEdge.id === e.id) {
+            ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 4;
+            ctx.shadowColor = '#00e5ff'; ctx.shadowBlur = 20; ctx.setLineDash([]);
         }
         
         ctx.stroke();
-        ctx.shadowBlur = 0;
+        
+        // Edge Labels
+        if (config.showLabels && isFocus) {
+            let mx = (p1.x + p2.x)/2, my = (p1.y + p2.y)/2;
+            ctx.fillStyle = mstIds.has(e.id) ? '#00ff88' : '#a4b0be';
+            if (cursedIds.has(e.id)) ctx.fillStyle = '#ff3a5c';
+            ctx.font = '10px "Share Tech Mono"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.shadowBlur = 0;
+            ctx.fillText(e.weight, mx, my - 8);
+        }
     });
-    
-    // Draw nodes
-    for (let i = 1; i <= graph.nodes; i++) {
-        let pos = physicsNodes[i];
-        let isSearchedNode = searchedNode === i;
-        let isConnectedToSearch = searchedNode === null || isSearchedNode || 
-            graph.edges.some(e => (e.from === searchedNode && e.to === i) || (e.to === searchedNode && e.from === i));
-            
+
+    // Nodes
+    for (let i = 1; i <= state.nodesCount; i++) {
+        let p = physicsNodes[i];
+        let isFocus = searchedNode === null || searchedNode === i || 
+                      state.edges.some(e => (e.from===i && e.to===searchedNode) || (e.to===i && e.from===searchedNode));
+        
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, isSearchedNode ? 20 : 15, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, searchedNode === i ? 22 : 16, 0, Math.PI*2);
         
-        if (isConnectedToSearch) {
-            ctx.fillStyle = isSearchedNode ? '#2ed573' : '#0b110e';
-            ctx.strokeStyle = '#2ed573';
-            ctx.globalAlpha = 1;
+        if (isFocus) {
+            ctx.fillStyle = searchedNode === i ? '#00ff88' : '#0a1a0f';
+            ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 2;
+            ctx.shadowColor = '#00ff88'; ctx.shadowBlur = 10;
         } else {
-            ctx.fillStyle = '#0b110e';
-            ctx.strokeStyle = 'rgba(46, 213, 115, 0.2)';
-            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#050a08'; ctx.strokeStyle = 'rgba(0,255,136,0.2)';
+            ctx.lineWidth = 1; ctx.shadowBlur = 0;
         }
+        ctx.fill(); ctx.stroke(); ctx.shadowBlur = 0;
+
+        ctx.fillStyle = searchedNode === i ? '#000' : '#e8ede9';
+        ctx.font = 'bold 12px "Orbitron"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(i, p.x, p.y);
         
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        ctx.fillStyle = isSearchedNode ? '#000' : '#f1f2f6';
-        ctx.font = 'bold 14px "Share Tech Mono"';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(i, pos.x, pos.y);
-        ctx.globalAlpha = 1;
+        // Node Names
+        if (config.showNames && isFocus) {
+            ctx.font = '9px "Share Tech Mono"';
+            ctx.fillStyle = '#a4b0be';
+            ctx.fillText(TROUPE_MEMBERS[i].split(' ')[0], p.x, p.y + 24);
+        }
     }
 }
 
 function animate() {
-    updatePhysics();
-    drawGraph();
+    applyPhysics();
+    draw();
     requestAnimationFrame(animate);
 }
-animate();
 
+// --- UI Updates ---
 function updateApp() {
-    let mstResult = computeMST(graph);
+    let mst = computeMST();
+    updateUndoRedoBtns();
     
-    // Update MST Status
-    document.getElementById('mst-weight').textContent = mstResult.totalWeight;
-    document.getElementById('mst-count').textContent = mstResult.edges.length;
+    // Header
+    document.getElementById('header-edges').textContent = state.edges.length;
+    let cursedCount = mst.anomalies.filter(a => a.isCursed).length;
+    document.getElementById('header-threats').textContent = cursedCount;
+    document.getElementById('threat-chip').className = `stat-chip ${cursedCount > 0 ? 'danger' : ''}`;
+
+    // Panels
+    document.getElementById('mst-weight').textContent = mst.totalWeight;
+    document.getElementById('mst-count').textContent = mst.edges.length;
+    document.getElementById('mst-components').textContent = mst.components;
+    document.getElementById('mst-complete').textContent = Math.round((mst.edges.length / (state.nodesCount-1))*100) + '%';
     
-    // Update Edge List
-    let edgeListHtml = mstResult.edges.map(e => `<li>Edge ${e.from} ↔ ${e.to} (W: ${e.weight})</li>`).join('');
-    document.getElementById('mst-edge-list').innerHTML = edgeListHtml || '<li>No edges in MST</li>';
-    
-    // Update Anomaly List (Real-time Report)
-    let anomalyHtml = mstResult.anomalies.map(a => {
-        let color = a.isCursed ? 'var(--danger-color)' : '#ffa502';
-        let status = a.isCursed ? 'CURSED (Excluded)' : 'WARNING';
-        return `<li style="color:${color}; margin-bottom:10px;">
-            <strong>Edge ${a.edge.from}↔${a.edge.to}:</strong> 
-            [Suspicion Level: ${a.suspicion}%] - ${status}<br>
-            <span style="font-size:0.85em; opacity:0.8;">Reason: ${a.reason}</span>
+    // Graph Props
+    let maxEdges = (state.nodesCount * (state.nodesCount-1))/2;
+    document.getElementById('graph-density').textContent = Math.round((state.edges.length/maxEdges)*100) + '%';
+    document.getElementById('avg-degree').textContent = (state.edges.length*2 / state.nodesCount).toFixed(1);
+    let avgW = state.edges.length ? (state.edges.reduce((a,b)=>a+b.weight,0)/state.edges.length).toFixed(1) : 0;
+    document.getElementById('avg-weight').textContent = avgW;
+    document.getElementById('is-connected').textContent = mst.components === 1 ? 'Yes' : 'No';
+
+    // Edge Lists
+    let selectHtml = '<option value="">Choose an edge...</option>';
+    state.edges.forEach(e => { selectHtml += `<option value="${e.id}">[${e.id}] ${e.from}↔${e.to} (W:${e.weight})</option>`; });
+    document.getElementById('edge-select').innerHTML = selectHtml;
+
+    let mstHtml = mst.edges.map(e => `<li><span>${e.from}↔${e.to}</span> <span style="color:var(--neon)">${e.weight}</span></li>`).join('');
+    document.getElementById('mst-edge-list').innerHTML = mstHtml || '<li>No MST edges</li>';
+
+    // Anomalies
+    document.getElementById('anomaly-count').textContent = mst.anomalies.length;
+    let anomalyHtml = mst.anomalies.map(a => {
+        let color = a.isCursed ? 'var(--danger)' : 'var(--warn)';
+        let status = a.isCursed ? 'CURSED' : 'WARNING';
+        return `<li>
+            <div style="color:${color}; font-weight:bold; margin-bottom:4px;">Edge ${a.edge.from}↔${a.edge.to} [${status}]</div>
+            <div style="color:var(--text-dim)">Suspicion: ${a.suspicion}%</div>
+            <div style="color:var(--text-dim); margin-top:2px">${a.reason}</div>
         </li>`;
     }).join('');
-    document.getElementById('anomaly-list').innerHTML = anomalyHtml || '<li style="color:var(--primary-color)">No cursed edges detected. The web is pure.</li>';
-    
-    // Update Edge Select Dropdown
-    let select = document.getElementById('edge-select');
-    select.innerHTML = '<option value="">Select Edge...</option>' + 
-        graph.edges.map(e => `<option value="${e.id}">[${e.id}] ${e.from} ↔ ${e.to} (W: ${e.weight})</option>`).join('');
+    document.getElementById('anomaly-list').innerHTML = anomalyHtml || '<li class="no-anomaly"><span class="pulse-dot green"></span> Web integrity verified. No cursed edges.</li>';
 }
 
-// UI Controls
-document.getElementById('add-edge-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    let from = parseInt(document.getElementById('node-a').value);
-    let to = parseInt(document.getElementById('node-b').value);
-    let weight = parseFloat(document.getElementById('weight').value);
+function populateSelects() {
+    let opts = '<option value="">Node...</option>';
+    for(let i=1; i<=13; i++) opts += `<option value="${i}">[${i}] ${TROUPE_MEMBERS[i]}</option>`;
+    document.getElementById('node-a').innerHTML = opts;
+    document.getElementById('node-b').innerHTML = opts;
     
-    if (from >= 1 && from <= 13 && to >= 1 && to <= 13 && from !== to) {
-        addEdge(graph, { from, to, weight });
-        e.target.reset();
-    } else {
-        alert("Invalid nodes. Must be between 1 and 13, and distinct.");
-    }
-});
+    let searchOpts = '<option value="">All nodes (reset)</option>';
+    for(let i=1; i<=13; i++) searchOpts += `<option value="${i}">[${i}] ${TROUPE_MEMBERS[i]}</option>`;
+    document.getElementById('search-node').innerHTML = searchOpts;
+}
 
-document.getElementById('update-btn').addEventListener('click', () => {
-    let edgeId = parseInt(document.getElementById('edge-select').value);
-    let newWeight = parseFloat(document.getElementById('new-weight').value);
-    if (!isNaN(edgeId) && !isNaN(newWeight)) {
-        updateWeight(graph, edgeId, newWeight);
-        document.getElementById('new-weight').value = '';
-    }
-});
+// --- Event Listeners ---
+function setupEventListeners() {
+    // Controls
+    document.getElementById('add-edge-form').addEventListener('submit', e => {
+        e.preventDefault();
+        let u = parseInt(document.getElementById('node-a').value);
+        let v = parseInt(document.getElementById('node-b').value);
+        let w = parseFloat(document.getElementById('weight').value);
+        if(u && v && !isNaN(w) && u !== v) { saveState(); addEdge(u, v, w); e.target.reset(); }
+        else alert("Invalid nodes.");
+    });
 
-document.getElementById('remove-btn').addEventListener('click', () => {
-    let edgeId = parseInt(document.getElementById('edge-select').value);
-    if (!isNaN(edgeId)) {
-        removeEdge(graph, edgeId);
-    }
-});
+    document.getElementById('update-btn').addEventListener('click', () => {
+        let id = parseInt(document.getElementById('edge-select').value);
+        let w = parseFloat(document.getElementById('new-weight').value);
+        if(!isNaN(id) && !isNaN(w)) { saveState(); updateWeight(id, w); document.getElementById('new-weight').value = ''; }
+    });
 
-// Search Node
-document.getElementById('search-btn').addEventListener('click', () => {
-    let val = document.getElementById('search-node').value;
-    if (val === '') {
-        searchedNode = null;
-        document.getElementById('search-results').innerHTML = 'Network view reset.';
-    } else {
-        let node = parseInt(val);
-        if (node >= 1 && node <= 13) {
-            searchedNode = node;
-            document.getElementById('search-results').innerHTML = `Focusing on Node ${node} and its connections.`;
+    document.getElementById('remove-btn').addEventListener('click', () => {
+        let id = parseInt(document.getElementById('edge-select').value);
+        if(!isNaN(id)) { saveState(); removeEdge(id); }
+    });
+
+    document.getElementById('search-btn').addEventListener('click', () => {
+        let val = document.getElementById('search-node').value;
+        searchedNode = val ? parseInt(val) : null;
+        let res = document.getElementById('search-results');
+        if(searchedNode) res.innerHTML = `<span class="pulse-dot"></span> Focused on ${TROUPE_MEMBERS[searchedNode]}`;
+        else res.innerHTML = `<span class="pulse-dot green"></span> Full network view active.`;
+    });
+
+    // Header Actions
+    document.getElementById('undo-btn').addEventListener('click', undo);
+    document.getElementById('redo-btn').addEventListener('click', redo);
+    document.addEventListener('keydown', e => {
+        if(e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+        if(e.ctrlKey && e.key === 'y') { e.preventDefault(); redo(); }
+    });
+
+    document.getElementById('export-btn').addEventListener('click', () => {
+        let blob = new Blob([JSON.stringify(state)], {type: 'application/json'});
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement('a'); a.href = url; a.download = 'spider_web_data.json'; a.click();
+        logActivity("Graph exported.", 'SYS');
+    });
+
+    document.getElementById('import-btn').addEventListener('click', () => document.getElementById('import-file').click());
+    document.getElementById('import-file').addEventListener('change', e => {
+        let file = e.target.files[0];
+        if(!file) return;
+        let reader = new FileReader();
+        reader.onload = ev => {
+            try {
+                let data = JSON.parse(ev.target.result);
+                saveState(); state = data; updateApp(); logActivity("Graph imported.", 'SYS');
+            } catch(err) { alert("Invalid JSON"); }
+        };
+        reader.readAsText(file);
+    });
+
+    // Toggles
+    document.getElementById('physics-toggle').addEventListener('change', e => config.physicsEnabled = e.target.checked);
+    document.getElementById('labels-toggle').addEventListener('change', e => config.showLabels = e.target.checked);
+    document.getElementById('names-toggle').addEventListener('change', e => config.showNames = e.target.checked);
+    
+    let speedSlider = document.getElementById('anim-speed');
+    speedSlider.addEventListener('input', e => {
+        config.animSpeed = parseInt(e.target.value);
+        document.getElementById('speed-label').textContent = config.animSpeed + 'ms';
+    });
+
+    // Animation
+    document.getElementById('animate-mst-btn').addEventListener('click', () => {
+        if(animationInterval) clearInterval(animationInterval);
+        animationMode = true; animationEdges.clear();
+        let mst = computeMST();
+        let i = 0;
+        logActivity("Starting MST Animation...", 'SYS');
+        animationInterval = setInterval(() => {
+            if(i < mst.edges.length) {
+                animationEdges.add(mst.edges[i].id);
+                i++;
+            } else {
+                clearInterval(animationInterval);
+                logActivity("MST Animation complete.", 'SYS');
+            }
+        }, config.animSpeed);
+    });
+
+    document.getElementById('reset-animation-btn').addEventListener('click', () => {
+        if(animationInterval) clearInterval(animationInterval);
+        animationMode = false; animationEdges.clear();
+    });
+
+    // Canvas Interactions
+    let draggingNode = null;
+    canvas.addEventListener('mousedown', e => {
+        let rect = canvas.getBoundingClientRect();
+        let mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        for(let i=1; i<=state.nodesCount; i++) {
+            let dx = mx - physicsNodes[i].x, dy = my - physicsNodes[i].y;
+            if(Math.sqrt(dx*dx + dy*dy) < 20) {
+                draggingNode = i; physicsNodes[i].dragged = true; return;
+            }
         }
-    }
-});
-
-// Click Interaction on Canvas
-canvas.addEventListener('click', (e) => {
-    let rect = canvas.getBoundingClientRect();
-    let mouseX = e.clientX - rect.left;
-    let mouseY = e.clientY - rect.top;
+    });
     
-    let found = null;
-    let minDist = 15; // click radius
-    
-    for (let edge of graph.edges) {
-        let p1 = physicsNodes[edge.from];
-        let p2 = physicsNodes[edge.to];
+    canvas.addEventListener('mousemove', e => {
+        let rect = canvas.getBoundingClientRect();
+        let mx = e.clientX - rect.left, my = e.clientY - rect.top;
         
-        let l2 = Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2);
-        let t = Math.max(0, Math.min(1, ((mouseX - p1.x) * (p2.x - p1.x) + (mouseY - p1.y) * (p2.y - p1.y)) / l2));
-        let projX = p1.x + t * (p2.x - p1.x);
-        let projY = p1.y + t * (p2.y - p1.y);
-        let dist = Math.sqrt(Math.pow(mouseX - projX, 2) + Math.pow(mouseY - projY, 2));
-        
-        if (dist < minDist) {
-            found = edge;
-            minDist = dist;
+        if(draggingNode) {
+            physicsNodes[draggingNode].x = mx; physicsNodes[draggingNode].y = my;
+            return;
         }
-    }
-    
-    clickedEdge = found;
-    
-    if (found) {
-        let mstResult = computeMST(graph);
-        let anomaly = mstResult.anomalies.find(a => a.edge.id === found.id);
-        
-        let suspicionLevel = anomaly ? anomaly.suspicion : 0;
-        let isCursed = anomaly ? anomaly.isCursed : false;
-        let color = isCursed ? 'var(--danger-color)' : (suspicionLevel > 0 ? '#ffa502' : 'var(--primary-color)');
-        let status = isCursed ? 'CURSED ⚠️' : 'CLEAN ✔️';
 
-        tooltip.innerHTML = `
-            <div style="border-bottom: 1px solid var(--border-color); margin-bottom: 5px; padding-bottom: 5px;">
-                <strong>EDGE DETAILS</strong> (ID: ${found.id})
-            </div>
-            Nodes: <strong>${found.from} ↔ ${found.to}</strong><br>
-            Weight: <strong>${found.weight}</strong><br>
-            Suspicion Level: <strong style="color:${color}">${suspicionLevel}%</strong><br>
-            Status: <strong style="color:${color}">${status}</strong>
-            ${anomaly ? `<div style="margin-top:5px; font-size:0.8em; color:var(--text-muted)">Reason: ${anomaly.reason}</div>` : ''}
-        `;
-        
-        tooltip.style.left = (e.clientX + 20) + 'px';
-        tooltip.style.top = (e.clientY + 20) + 'px';
-        tooltip.style.opacity = 1;
-        tooltip.style.pointerEvents = 'auto'; // allow interaction if needed
-    } else {
+        // Edge Hover
+        let found = null, minDist = 10;
+        for(let edge of state.edges) {
+            let p1 = physicsNodes[edge.from], p2 = physicsNodes[edge.to];
+            let l2 = Math.pow(p1.x-p2.x,2) + Math.pow(p1.y-p2.y,2);
+            let t = Math.max(0, Math.min(1, ((mx-p1.x)*(p2.x-p1.x) + (my-p1.y)*(p2.y-p1.y))/l2));
+            let px = p1.x + t*(p2.x-p1.x), py = p1.y + t*(p2.y-p1.y);
+            let d = Math.sqrt(Math.pow(mx-px,2) + Math.pow(my-py,2));
+            if(d < minDist) { found = edge; minDist = d; }
+        }
+        hoveredEdge = found;
+
+        if(found) {
+            let anoms = detectAnomaly();
+            let a = anoms.find(x => x.edge.id === found.id);
+            let color = a ? (a.isCursed ? 'var(--danger)' : 'var(--warn)') : 'var(--neon)';
+            tooltip.innerHTML = `
+                <div style="border-bottom:1px solid var(--border); padding-bottom:5px; margin-bottom:5px;">
+                    EDGE ID: <b>#${found.id}</b>
+                </div>
+                Nodes: ${TROUPE_MEMBERS[found.from].split(' ')[0]} ↔ ${TROUPE_MEMBERS[found.to].split(' ')[0]}<br>
+                Weight: <b style="color:${color}">${found.weight}</b><br>
+                Status: <span style="color:${color}">${a ? (a.isCursed ? 'CURSED' : 'WARNING') : 'CLEAN'}</span>
+                ${a ? `<div style="margin-top:5px; font-size:0.8em; color:var(--text-dim)">${a.reason}</div>` : ''}
+            `;
+            tooltip.style.left = (e.clientX + 15) + 'px';
+            tooltip.style.top = (e.clientY + 15) + 'px';
+            tooltip.style.opacity = 1;
+        } else {
+            tooltip.style.opacity = 0;
+        }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+        if(draggingNode) { physicsNodes[draggingNode].dragged = false; draggingNode = null; }
+    });
+    canvas.addEventListener('mouseleave', () => {
+        if(draggingNode) { physicsNodes[draggingNode].dragged = false; draggingNode = null; }
         tooltip.style.opacity = 0;
-        tooltip.style.pointerEvents = 'none';
-    }
-});
+    });
+}
 
-updateApp();
+// Start
+init();
